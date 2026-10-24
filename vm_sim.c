@@ -217,14 +217,14 @@ void translateAddress()
     if (frame_number == -1) {
         tlbTable->tlbMissCount++; // Increment the miss count
         // walk the contents of the page table
-        for(int i = 0; i < nextPage; i++){
-            if(pageTable->pageNumArr[i] == page_number){  // If the page is found in those contents
+        for (int i = 0; i < nextPage; i++) {
+            if (pageTable->pageNumArr[i] == page_number) {  // If the page is found in those contents
                 frame_number = pageTable->frameNumArr[i]; // Extract the frame_number
                 break; // Found in pageTable
             }
         }
         // NOTE: Page Table Fault Encountered
-        if(frame_number == -1) {  // if the page is not found in those contents
+        if (frame_number == -1) {  // if the page is not found in those contents
             pageTable->pageFaultCount++;   // Increment the number of page faults
             // page fault, call to readFromStore to get the frame into physical memory and the page table
             start = clock();
@@ -302,26 +302,26 @@ void tlbFIFOinsert(int pageNumber, int frameNumber)
     int i;
 
     // If it's already in the TLB, break
-    for(i = 0; i < nextTLBentry; i++){
-        if(tlbTable->pageNumArr[i] == pageNumber){
+    for (i = 0; i < nextTLBentry; i++) {
+        if (tlbTable->pageNumArr[i] == pageNumber) {
             break;
         }
     }
 
     // if the number of entries is equal to the index
-    if(i == nextTLBentry){
-        if(nextTLBentry < TLB_SIZE){  // IF TLB Buffer has open positions
+    if (i == nextTLBentry) {
+        if (nextTLBentry < TLB_SIZE) {  // IF TLB Buffer has open positions
             tlbTable->pageNumArr[nextTLBentry] = pageNumber;    // insert the page and frame on the end
             tlbTable->frameNumArr[nextTLBentry] = frameNumber;
         }
-        else{ // No room in TLB Buffer
+        else { // No room in TLB Buffer
 
             // Replace the last TLB entry with our new entry
             tlbTable->pageNumArr[nextTLBentry - 1] = pageNumber;
             tlbTable->frameNumArr[nextTLBentry - 1] = frameNumber;
 
             // Then shift up all the TLB entries by 1 so we can maintain FIFO order
-            for(i = 0; i < TLB_SIZE - 1; i++){
+            for (i = 0; i < TLB_SIZE - 1; i++) {
                 tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i + 1];
                 tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i + 1];
             }
@@ -329,25 +329,25 @@ void tlbFIFOinsert(int pageNumber, int frameNumber)
     }
 
     // If the index is not equal to the number of entries
-    else{
+    else {
 
-        for(i = i; i < nextTLBentry - 1; i++){  // iterate through up to one less than the number of entries
+        for (i = i; i < nextTLBentry - 1; i++) {  // iterate through up to one less than the number of entries
             // Move everything over in the arrays
             tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i + 1];
             tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i + 1];
         }
-        if(nextTLBentry < TLB_SIZE){  // if there is still room in the array, put the page and frame on the end
+        if (nextTLBentry < TLB_SIZE) {  // if there is still room in the array, put the page and frame on the end
              // Insert the page and frame on the end
             tlbTable->pageNumArr[nextTLBentry] = pageNumber;
             tlbTable->frameNumArr[nextTLBentry] = frameNumber;
 
         }
-        else{  // Otherwise put the page and frame on the number of entries - 1
+        else {  // Otherwise put the page and frame on the number of entries - 1
             tlbTable->pageNumArr[nextTLBentry - 1] = pageNumber;
             tlbTable->frameNumArr[nextTLBentry - 1] = frameNumber;
         }
     }
-    if(nextTLBentry < TLB_SIZE) { // If there is still room in the arrays, increment the number of entries
+    if (nextTLBentry < TLB_SIZE) { // If there is still room in the arrays, increment the number of entries
         nextTLBentry++;
     }
 }
@@ -425,15 +425,15 @@ void tlbS3FIFOinsert(int pageNumber, int frameNumber)
 
     int half = TLB_SIZE / 2;
 
-    for(int i = 0; i <= TLB_SIZE; i++){
-        if(tlbTable->pageNumArr[i] == pageNumber){
+    for (int i = 0; i <= TLB_SIZE; i++) {
+        if (tlbTable->pageNumArr[i] == pageNumber) {
             tlbTable->numUsesArr[i]++;
             return;
         }
     }
 
-    if(nextTLBentry <= half){
-        for(int i = nextTLBentry; i > 0; i--){
+    if (nextTLBentry <= half) {
+        for (int i = nextTLBentry; i > 0; i--) {
             tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i - 1];
             tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i - 1];
             tlbTable->numUsesArr[i] = tlbTable->numUsesArr[i - 1];
@@ -445,8 +445,8 @@ void tlbS3FIFOinsert(int pageNumber, int frameNumber)
         return;
     }
 
-    if(tlbTable->numUsesArr[half] > 0){
-        for(int i = nextTLBentry; i > 0; i--){
+    if (tlbTable->numUsesArr[half] > 0) {
+        for (int i = nextTLBentry; i > 0; i--) {
             tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i - 1];
             tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i - 1];
             tlbTable->numUsesArr[i] = tlbTable->numUsesArr[i - 1];
@@ -457,8 +457,8 @@ void tlbS3FIFOinsert(int pageNumber, int frameNumber)
         nextTLBentry++;
         return;
     }
-    else{
-        for(int i = half; i > 0; i--){
+    else {
+        for (int i = half; i > 0; i--) {
             tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i - 1];
             tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i - 1];
             tlbTable->numUsesArr[i] = tlbTable->numUsesArr[i - 1];
@@ -483,16 +483,16 @@ void tlbSIEVEinsert(int pageNumber, int frameNumber)
     // In theory, we are improving on FIFO by avoiding the removal of commonly used address translations.
 
     // If it's already in the TLB, return
-    for(int i = 0; i < nextTLBentry; i++){
-        if(tlbTable->pageNumArr[i] == pageNumber){
+    for (int i = 0; i < nextTLBentry; i++) {
+        if (tlbTable->pageNumArr[i] == pageNumber) {
             // Set the "used-bit" corresponding to that entry equal to 1
             tlbTable->pointerArr[i] = 1;
             return;
         }
     }
 
-    if(nextTLBentry < TLB_SIZE){  // IF TLB Buffer has open positions
-        for(int i = nextTLBentry; i > 0; i--){
+    if (nextTLBentry < TLB_SIZE) {  // IF TLB Buffer has open positions
+        for (int i = nextTLBentry; i > 0; i--) {
             tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i - 1];
             tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i - 1];
             tlbTable->pointerArr[i] = tlbTable->pointerArr[i - 1];
@@ -505,8 +505,8 @@ void tlbSIEVEinsert(int pageNumber, int frameNumber)
     }
 
     // No room in TLB Buffer
-    for(int count = 0; count <= TLB_SIZE; count++){
-        if(tlbTable->pointerArr[hand] == 0){
+    for (int count = 0; count <= TLB_SIZE; count++) {
+        if (tlbTable->pointerArr[hand] == 0) {
             for(int i = hand; i > 0; i--){
                 tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i - 1];
                 tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i - 1];
@@ -520,13 +520,13 @@ void tlbSIEVEinsert(int pageNumber, int frameNumber)
             }
             break;
         }
-        else{
+        else {
             // Set the pointer to 0, as entries are only protected for one loop-around at a time
             tlbTable->pointerArr[hand] = 0;
-            if(hand == 0){
+            if (hand == 0) {
                 hand = TLB_SIZE - 1;
             }
-            else{
+            else {
                 hand--;
             }
         }

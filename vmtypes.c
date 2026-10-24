@@ -34,7 +34,7 @@ vmTable_t* createVMtable(int length)
     }
 
     // If there is not enough memory on the heap to make a call to malloc() // Notify and Exit
-    if(new_table == NULL || new_table->pageNumArr == NULL || new_table->frameNumArr == NULL || new_table->pointerArr == NULL || new_table->numUsesArr == NULL) {
+    if (new_table == NULL || new_table->pageNumArr == NULL || new_table->frameNumArr == NULL || new_table->pointerArr == NULL || new_table->numUsesArr == NULL) {
         printf("Error - Could not allocate a new Virtual Memory Addressing Table!\r\n");
         exit(-1);
     }
@@ -111,14 +111,14 @@ int** dramAllocate(int frameCount, int blockSize)
 {
     int** temp;
     temp = malloc(frameCount * sizeof(int*));
-    for(int i = 0; i < frameCount; i++) {
+    for (int i = 0; i < frameCount; i++) {
         temp[i] = (int*)malloc(sizeof(int) * blockSize);
         for(int j = 0; j < blockSize; j++) {
             temp[i][j] = 0;
         }
     }
     // If there is not enough memory to make call to malloc() // Notify and exit
-    if(temp == NULL) {
+    if (temp == NULL) {
         printf("Error - Could not allocate a new Physical Memory Matrix using dramAllocate() function!\r\n");
         exit(-1);
     }
