@@ -50,6 +50,8 @@ int nextTLBentry = 0; // Tracks the next available index of entry into the TLB
 int nextPage = 0;  // Tracks the next available page in the page table
 int nextFrame = 0; // Tracks the next available frame TLB or Page Table
 
+int hand = TLB_SIZE - 1; // For SIEVE, points to an entry we haven't reused
+
 // input file and backing store
 FILE* address_file;
 FILE* backing_store;
@@ -76,6 +78,8 @@ void translateAddress();
 void readFromStore(int pageNumber);
 void tlbFIFOinsert(int pageNumber, int frameNumber);
 void tlbLRUinsert(int pageNumber, int frameNumber);
+void tlbS3FIFOinsert(int pageNumber, int frameNumber);
+void tlbSIEVEinsert(int pageNumber, int frameNumber);
 int getOldestEntry(int tlbSize);
 double getAvgTimeInBackingStore();
 
@@ -121,9 +125,9 @@ int main(int argc, char *argv[])
     } while (display_choice != 'n' && display_choice != 'y');
 
     do {
-        printf("Choose TLB Replacement Strategy [1: FIFO, 2: LRU]: ");
+        printf("Choose TLB Replacement Strategy [1: FIFO, 2: LRU, 3: S3-FIFO, 4: SIEVE]: ");
         scanf("\n%c", &algo_choice);
-    } while (algo_choice != '1' && algo_choice != '2');
+    } while (algo_choice != '1' && algo_choice != '2' && algo_choice != '3' && algo_choice != '4');
 
 
 
@@ -138,7 +142,7 @@ int main(int argc, char *argv[])
         offset_number = getOffset(OFFSET_MASK, virtual_addr);
 
         // Get the physical address and translatedValue stored at that address
-        translateAddress(algo_choice);
+        translateAddress();
         translationCount++;  // increment the number of translated addresses
     }
 
@@ -146,8 +150,14 @@ int main(int argc, char *argv[])
     if (algo_choice == '1') {
         algoName = "FIFO";
     }
-    else {
+    else if (algo_choice == '2') {
         algoName = "LRU";
+    }
+    else if (algo_choice == '3') {
+        algoName = "S3-FIFO";
+    }
+    else if (algo_choice == '4') {
+        algoName = "SIEVE";
     }
 
     printf("\n-----------------------------------------------------------------------------------\n");
@@ -229,8 +239,14 @@ void translateAddress()
         // Call function to insert the page number and frame number into the TLB
         tlbFIFOinsert(page_number, frame_number);
     }
-    else {
+    else if (algo_choice == '2') {
         tlbLRUinsert(page_number, frame_number);
+    }
+    else if (algo_choice == '3') {
+        tlbS3FIFOinsert(page_number, frame_number);
+    }
+    else if (algo_choice == '4') {
+        tlbSIEVEinsert(page_number, frame_number);
     }
 
     // Frame number and offset used to get the signed translatedValue stored at that address
@@ -278,6 +294,11 @@ void readFromStore(int pageNumber)
 // Function to insert a page number and frame number into the TLB with a FIFO replacement
 void tlbFIFOinsert(int pageNumber, int frameNumber)
 {
+    // FIFO
+    // This algorithm turns the TLB into a queue of address translations.
+    // Anytime we encounter a new one, we push it to the back of the queue and slide the others up one spot. The last address translation is dropped.
+    // I DON'T THINK REUSED ADDRESS TRANSLATIONS ARE PUSHED TO THE BACK OF THE QUEUE. DOUBLE CHECK THIS!!!!
+
     int i;
 
     // If it's already in the TLB, break
@@ -335,6 +356,8 @@ void tlbFIFOinsert(int pageNumber, int frameNumber)
 // Function to insert a page number and frame number into the TLB with a LRU replacement
 void tlbLRUinsert(int pageNumber, int frameNumber)
 {
+    // LRU
+    // This algorithm gets rid of the address translation that we "Least Recently Used."
 
     bool freeSpotFound = false;
     bool alreadyThere = false;
@@ -342,11 +365,11 @@ void tlbLRUinsert(int pageNumber, int frameNumber)
 
     // SEEK -- > Find the index to replace and increment age for all other entries
     for (int i = 0; i < TLB_SIZE; i++) {
-        if ((tlbTable->pageNumArr[i] != pageNumber) && (tlbTable->pageNumArr[i] != 0)) {
+        if ((tlbTable->pageNumArr[i] != pageNumber) && (tlbTable->pageNumArr[i] != -1)) {
             // If entry is not in TLB and not a free spot, increment its age
             tlbTable->entryAgeArr[i]++;
         }
-        else if ((tlbTable->pageNumArr[i] != pageNumber) && (tlbTable->pageNumArr[i] == 0)) {
+        else if ((tlbTable->pageNumArr[i] != pageNumber) && (tlbTable->pageNumArr[i] == -1)) {
             // Available spot in TLB found
             if (!freeSpotFound) {
                 replaceIndex = i;
@@ -379,6 +402,138 @@ void tlbLRUinsert(int pageNumber, int frameNumber)
 
     }
 }
+
+
+void tlbS3FIFOinsert(int pageNumber, int frameNumber)
+{
+    // S3-FIFO (Segmentation faulting right now)
+    // This algorithm logically follows these steps:
+    //
+    // 1. Split the TLB into 2 seperate queues of address translations. These will function as "levels" of the TLB.
+    //
+    // 2. The first queue is where any new address translations will be put.
+    //    As we go, we will continue pushing address translaitons through this first queue.
+    //
+    // 3. When address translations are finished on the first queue (and are about to be removed and forgotten), we evaluate them.
+    //    If we used that address translation again while it was on the queue, we should keep it, as we will likely keep using it!
+    //
+    // 4. If we decide to keep an address translation, bump it up to the second queue. If we don't, we can forget it.
+    //
+    // 5. Since most address translations won't be bumped up to the second queue, address translations stored there have a much longer life.
+    //    Keeping commonly used address translations around should result in more TLB hits and a faster Operating System.
+
+
+    int half = TLB_SIZE / 2;
+
+    for(int i = 0; i <= TLB_SIZE; i++){
+        if(tlbTable->pageNumArr[i] == pageNumber){
+            tlbTable->numUsesArr[i]++;
+            return;
+        }
+    }
+
+    if(nextTLBentry <= half){
+        for(int i = nextTLBentry; i > 0; i--){
+            tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i - 1];
+            tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i - 1];
+            tlbTable->numUsesArr[i] = tlbTable->numUsesArr[i - 1];
+        }
+        tlbTable->pageNumArr[0] = pageNumber;    // insert the page and frame to the start
+        tlbTable->frameNumArr[0] = frameNumber;
+        tlbTable->numUsesArr[0] = 0;    // Initialize the number of uses to 0 for new entries
+        nextTLBentry++;
+        return;
+    }
+
+    if(tlbTable->numUsesArr[half] > 0){
+        for(int i = nextTLBentry; i > 0; i--){
+            tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i - 1];
+            tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i - 1];
+            tlbTable->numUsesArr[i] = tlbTable->numUsesArr[i - 1];
+        }
+        tlbTable->pageNumArr[0] = pageNumber;    // insert the page and frame to the start
+        tlbTable->frameNumArr[0] = frameNumber;
+        tlbTable->numUsesArr[0] = 0;
+        nextTLBentry++;
+        return;
+    }
+    else{
+        for(int i = half; i > 0; i--){
+            tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i - 1];
+            tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i - 1];
+            tlbTable->numUsesArr[i] = tlbTable->numUsesArr[i - 1];
+        }
+        tlbTable->pageNumArr[0] = pageNumber;    // insert the page and frame to the start
+        tlbTable->frameNumArr[0] = frameNumber;
+        tlbTable->numUsesArr[0] = 0;
+        nextTLBentry++;
+        return;
+    }
+}
+
+
+void tlbSIEVEinsert(int pageNumber, int frameNumber)
+{
+    // SIEVE
+    //
+    // This algorithm is a variation of FIFO
+    // Logically, it works the same, except each address translation in the queue has a **POINTER** that keeps track of whether we reused it.
+    // When it's time to pop an address translation to make room for a new one, we only pop ones that weren't reused.
+    // 
+    // In theory, we are improving on FIFO by avoiding the removal of commonly used address translations.
+
+    // If it's already in the TLB, return
+    for(int i = 0; i < nextTLBentry; i++){
+        if(tlbTable->pageNumArr[i] == pageNumber){
+            // Set the "used-bit" corresponding to that entry equal to 1
+            tlbTable->pointerArr[i] = 1;
+            return;
+        }
+    }
+
+    if(nextTLBentry < TLB_SIZE){  // IF TLB Buffer has open positions
+        for(int i = nextTLBentry; i > 0; i--){
+            tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i - 1];
+            tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i - 1];
+            tlbTable->pointerArr[i] = tlbTable->pointerArr[i - 1];
+        }
+        tlbTable->pageNumArr[0] = pageNumber;    // insert the page and frame to the start
+        tlbTable->frameNumArr[0] = frameNumber;
+        tlbTable->pointerArr[0] = 0;
+        nextTLBentry++;
+        return;
+    }
+
+    // No room in TLB Buffer
+    for(int count = 0; count <= TLB_SIZE; count++){
+        if(tlbTable->pointerArr[hand] == 0){
+            for(int i = hand; i > 0; i--){
+                tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i - 1];
+                tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i - 1];
+                tlbTable->pointerArr[i] = tlbTable->pointerArr[i - 1];
+            }
+            tlbTable->pageNumArr[0] = pageNumber;
+            tlbTable->frameNumArr[0] = frameNumber;
+            tlbTable->pointerArr[0] = 0;
+            if(hand == 0){
+                hand = TLB_SIZE - 1;
+            }
+            break;
+        }
+        else{
+            // Set the pointer to 0, as entries are only protected for one loop-around at a time
+            tlbTable->pointerArr[hand] = 0;
+            if(hand == 0){
+                hand = TLB_SIZE - 1;
+            }
+            else{
+                hand--;
+            }
+        }
+    }
+    return;
+}
+
 
 // Finds the oldest entry in TLB and returns the replacement Index
 int getOldestEntry(int tlbSize) {

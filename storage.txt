@@ -1,0 +1,58 @@
+    int i;
+
+    // Because of the way this simulation builds the TLB, I will n
+    // If it's already in the TLB, break
+    for(i = 0; i < nextTLBentry/2; i++){
+        if(tlbTable->pageNumArr[i] == pageNumber){
+            break;
+        }
+    }
+    // Need to loop through the top queue, too
+    for(i = nextTLBentry / 2; i< nextTLBentry; i++){
+        if(tlbTable->pageNumArr[i] == pageNumber){
+            break;
+        }
+    }
+
+    // if the number of entries is equal to the index
+    if(i == nextTLBentry){
+        if(nextTLBentry < TLB_SIZE/2){  // IF TLB Buffer has open positions
+            tlbTable->pageNumArr[nextTLBentry] = pageNumber;    // insert the page and frame on the end
+            tlbTable->frameNumArr[nextTLBentry] = frameNumber;
+        }
+        else{ // No room in TLB Buffer
+
+            // Replace the last TLB entry with our new entry
+            tlbTable->pageNumArr[nextTLBentry - 1] = pageNumber;
+            tlbTable->frameNumArr[nextTLBentry - 1] = frameNumber;
+
+            // Then shift up all the TLB entries by 1 so we can maintain FIFO order
+            for(i = 0; i < TLB_SIZE - 1; i++){
+                tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i + 1];
+                tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i + 1];
+            }
+        }
+    }
+
+    // If the index is not equal to the number of entries
+    else{
+
+        for(i = i; i < nextTLBentry - 1; i++){  // iterate through up to one less than the number of entries
+            // Move everything over in the arrays
+            tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i + 1];
+            tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i + 1];
+        }
+        if(nextTLBentry < TLB_SIZE){  // if there is still room in the array, put the page and frame on the end
+             // Insert the page and frame on the end
+            tlbTable->pageNumArr[nextTLBentry] = pageNumber;
+            tlbTable->frameNumArr[nextTLBentry] = frameNumber;
+
+        }
+        else{  // Otherwise put the page and frame on the number of entries - 1
+            tlbTable->pageNumArr[nextTLBentry - 1] = pageNumber;
+            tlbTable->frameNumArr[nextTLBentry - 1] = frameNumber;
+        }
+    }
+    if(nextTLBentry < TLB_SIZE) { // If there is still room in the arrays, increment the number of entries
+        nextTLBentry++;
+    }

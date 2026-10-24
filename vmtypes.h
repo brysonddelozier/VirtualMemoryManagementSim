@@ -8,6 +8,8 @@
 typedef struct vmTable_t {
     int *pageNumArr; // page number array
     int *frameNumArr; // frame number array for this
+    int *pointerArr; // pointers for SIEVE
+    int *numUsesArr; // keeps track of uses for S3-FIFO
     int *entryAgeArr; // Age of each index
     int length;
     int pageFaultCount;
