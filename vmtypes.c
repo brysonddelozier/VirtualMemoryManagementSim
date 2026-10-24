@@ -73,7 +73,7 @@ void displayTable(vmTable_t** tableToView)
 {
     printf("\n********************* SEQUENCE START ****************************\n ");
     for (int i = 0; i < (*tableToView)->length; i++) {
-        printf("Index(%d) := Page Number: %d\tFrame Number: %d\n", i, (*tableToView)->pageNumArr[i], (*tableToView)->frameNumArr[i]);
+        printf("Index(%d) := Page Number: %d\tFrame Number: %d\n", i, (*tableToView)->pageNums[i], (*tableToView)->frameNums[i]);
     }
     printf("\n********************* SEQUENCE END ***************************\n ");
 }

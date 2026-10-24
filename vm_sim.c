@@ -78,6 +78,7 @@ void translateAddress();
 void readFromStore(int pageNumber);
 void tlbFIFOinsert(int pageNumber, int frameNumber);
 void tlbLRUinsert(int pageNumber, int frameNumber);
+void tlbLRU2insert(int pageNumber, int frameNumber);
 void tlbS3FIFOinsert(int pageNumber, int frameNumber);
 void tlbSIEVEinsert(int pageNumber, int frameNumber);
 int getOldestEntry(int tlbSize);
@@ -125,9 +126,9 @@ int main(int argc, char *argv[])
     } while (display_choice != 'n' && display_choice != 'y');
 
     do {
-        printf("Choose TLB Replacement Strategy [1: FIFO, 2: LRU, 3: S3-FIFO, 4: SIEVE]: ");
+        printf("Choose TLB Replacement Strategy [1: FIFO, 2: LRU, 3: S3-FIFO, 4: SIEVE, 5: LRU2]: ");
         scanf("\n%c", &algo_choice);
-    } while (algo_choice != '1' && algo_choice != '2' && algo_choice != '3' && algo_choice != '4');
+    } while (algo_choice != '1' && algo_choice != '2' && algo_choice != '3' && algo_choice != '4' && algo_choice != '5');
 
 
 
@@ -158,6 +159,9 @@ int main(int argc, char *argv[])
     }
     else if (algo_choice == '4') {
         algoName = "SIEVE";
+    }
+    else if (algo_choice == '5') {
+        algoName = "LRU2";
     }
 
     printf("\n-----------------------------------------------------------------------------------\n");
@@ -247,6 +251,9 @@ void translateAddress()
     }
     else if (algo_choice == '4') {
         tlbSIEVEinsert(page_number, frame_number);
+    }
+    else if (algo_choice == '5') {
+        tlbLRU2insert(page_number, frame_number);
     }
 
     // Frame number and offset used to get the signed translatedValue stored at that address
@@ -406,7 +413,29 @@ void tlbLRUinsert(int pageNumber, int frameNumber)
 
 void tlbLRU2insert(int pageNumber, int frameNumber)
 {
+    // Is the next entry already in the queue? 
+    for (int i = 0; i < nextTLBentry; i++) {
+        if (tlbTable->pageNums[i] == pageNumber) {
+            // If so, move entries that were behind it up in the queue...
+            for (int j = i; j > 0; j--) {
+                tlbTable->pageNums[j] = tlbTable->pageNums[j - 1];
+                tlbTable->frameNums[j] = tlbTable->frameNums[j - 1];
+            }
+            // and put the next entry back at the start.
+            tlbTable->pageNums[0] = pageNumber;
+            tlbTable->frameNums[0] = frameNumber;
+            return;
+        }
+    }
 
+    // For every other case, just put the new entry at the front and slide everything else up
+    for (int i = TLB_SIZE - 1; i > 0; i--) {
+        tlbTable->pageNums[i] = tlbTable->pageNums[i - 1];
+        tlbTable->frameNums[i] = tlbTable->frameNums[i - 1]; 
+    }
+    tlbTable->pageNums[0] = pageNumber;
+    tlbTable->frameNums[0] = frameNumber;
+    return;
 }
 
 
