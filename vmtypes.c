@@ -15,26 +15,26 @@ vmTable_t* createVMtable(int length)
 {
     vmTable_t* new_table = malloc(sizeof(vmTable_t));
     new_table->length = length;
-    new_table->pageNumArr = malloc(sizeof(int) * length);
-    new_table->frameNumArr = malloc(sizeof(int) * length);
-    new_table->pointerArr = malloc(sizeof(int) * length);
-    new_table->numUsesArr = malloc(sizeof(int) * length);
-    new_table->entryAgeArr = malloc(sizeof(int) * length);
+    new_table->pageNums = malloc(sizeof(int) * length);
+    new_table->frameNums = malloc(sizeof(int) * length);
+    new_table->pointers = malloc(sizeof(int) * length);
+    new_table->numUses = malloc(sizeof(int) * length);
+    new_table->entryAges = malloc(sizeof(int) * length);
     new_table->pageFaultCount = 0;
     new_table->tlbHitCount = 0;
     new_table->tlbMissCount = 0;
 
     // Initialize the tables
     for (int i = 0; i < length; i++) {
-        new_table->pageNumArr[i] = -1;
-        new_table->frameNumArr[i] = -1;
-        new_table->pointerArr[i] = 0;
-        new_table->numUsesArr[i] = 0;
-        new_table->entryAgeArr[i] = 0;
+        new_table->pageNums[i] = -1;
+        new_table->frameNums[i] = -1;
+        new_table->pointers[i] = 0;
+        new_table->numUses[i] = 0;
+        new_table->entryAges[i] = 0;
     }
 
     // If there is not enough memory on the heap to make a call to malloc() // Notify and Exit
-    if (new_table == NULL || new_table->pageNumArr == NULL || new_table->frameNumArr == NULL || new_table->pointerArr == NULL || new_table->numUsesArr == NULL) {
+    if (new_table == NULL || new_table->pageNums == NULL || new_table->frameNums == NULL || new_table->pointers == NULL || new_table->numUses == NULL) {
         printf("Error - Could not allocate a new Virtual Memory Addressing Table!\r\n");
         exit(-1);
     }
@@ -47,20 +47,20 @@ vmTable_t* createVMtable(int length)
 */
 void freeVMtable(vmTable_t** table)
 {
-    if ((*table)->pageNumArr != NULL) {
-        free((*table)->pageNumArr);
+    if ((*table)->pageNums != NULL) {
+        free((*table)->pageNums);
     }
-    if ((*table)->frameNumArr != NULL) {
-        free((*table)->frameNumArr);
+    if ((*table)->frameNums != NULL) {
+        free((*table)->frameNums);
     }
-    if ((*table)->pointerArr != NULL) {
-        free((*table)->pointerArr);
+    if ((*table)->pointers != NULL) {
+        free((*table)->pointers);
     }
-    if ((*table)->numUsesArr != NULL) {
-        free((*table)->numUsesArr);
+    if ((*table)->numUses != NULL) {
+        free((*table)->numUses);
     }
-    if ((*table)->entryAgeArr != NULL) {
-        free((*table)->entryAgeArr);
+    if ((*table)->entryAges != NULL) {
+        free((*table)->entryAges);
     }
     free(*table);
 }

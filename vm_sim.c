@@ -29,9 +29,9 @@ typedef enum { false = 0, true = !false } bool; // Simple true or false boolean 
 /*
     vmTable is a generic struct defined type that is used to implement any
     number of caches for logical address translations. It contains the following components:
-        (1) int *pageNumArr; // page number array
-        (2) int *frameNumArr; // frame number array for this
-        (3) int *entryAgeArr; // the age of each entry
+        (1) int *pageNums; // page number array
+        (2) int *frameNums; // frame number array for this
+        (3) int *entryAges; // the age of each entry
         (4) int length; // The table size
         (5) int pageFaultCount; // Represents number of page faults, if implemeneted as Page Table
         (6) int tlbHitCount; // Represents TLB hit count
@@ -201,8 +201,8 @@ void translateAddress()
         If found, extract frame number and increment hit count
     */
     for (int i = 0; i < tlbTable->length; i++) {
-        if (tlbTable->pageNumArr[i] == page_number) {
-            frame_number = tlbTable->frameNumArr[i];
+        if (tlbTable->pageNums[i] == page_number) {
+            frame_number = tlbTable->frameNums[i];
             tlbTable->tlbHitCount++;
             break;
         }
@@ -218,8 +218,8 @@ void translateAddress()
         tlbTable->tlbMissCount++; // Increment the miss count
         // walk the contents of the page table
         for (int i = 0; i < nextPage; i++) {
-            if (pageTable->pageNumArr[i] == page_number) {  // If the page is found in those contents
-                frame_number = pageTable->frameNumArr[i]; // Extract the frame_number
+            if (pageTable->pageNums[i] == page_number) {  // If the page is found in those contents
+                frame_number = pageTable->frameNums[i]; // Extract the frame_number
                 break; // Found in pageTable
             }
         }
@@ -280,8 +280,8 @@ void readFromStore(int pageNumber)
     }
 
     // Then we want to load the frame number into the page table in the next frame
-    pageTable->pageNumArr[nextPage] = pageNumber;
-    pageTable->frameNumArr[nextPage] = nextFrame;
+    pageTable->pageNums[nextPage] = pageNumber;
+    pageTable->frameNums[nextPage] = nextFrame;
 
     // increment the counters that track the next available frames
     nextFrame++;
@@ -303,7 +303,7 @@ void tlbFIFOinsert(int pageNumber, int frameNumber)
 
     // If it's already in the TLB, break
     for (i = 0; i < nextTLBentry; i++) {
-        if (tlbTable->pageNumArr[i] == pageNumber) {
+        if (tlbTable->pageNums[i] == pageNumber) {
             break;
         }
     }
@@ -311,19 +311,19 @@ void tlbFIFOinsert(int pageNumber, int frameNumber)
     // if the number of entries is equal to the index
     if (i == nextTLBentry) {
         if (nextTLBentry < TLB_SIZE) {  // IF TLB Buffer has open positions
-            tlbTable->pageNumArr[nextTLBentry] = pageNumber;    // insert the page and frame on the end
-            tlbTable->frameNumArr[nextTLBentry] = frameNumber;
+            tlbTable->pageNums[nextTLBentry] = pageNumber;    // insert the page and frame on the end
+            tlbTable->frameNums[nextTLBentry] = frameNumber;
         }
         else { // No room in TLB Buffer
 
             // Replace the last TLB entry with our new entry
-            tlbTable->pageNumArr[nextTLBentry - 1] = pageNumber;
-            tlbTable->frameNumArr[nextTLBentry - 1] = frameNumber;
+            tlbTable->pageNums[nextTLBentry - 1] = pageNumber;
+            tlbTable->frameNums[nextTLBentry - 1] = frameNumber;
 
             // Then shift up all the TLB entries by 1 so we can maintain FIFO order
             for (i = 0; i < TLB_SIZE - 1; i++) {
-                tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i + 1];
-                tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i + 1];
+                tlbTable->pageNums[i] = tlbTable->pageNums[i + 1];
+                tlbTable->frameNums[i] = tlbTable->frameNums[i + 1];
             }
         }
     }
@@ -333,18 +333,18 @@ void tlbFIFOinsert(int pageNumber, int frameNumber)
 
         for (i = i; i < nextTLBentry - 1; i++) {  // iterate through up to one less than the number of entries
             // Move everything over in the arrays
-            tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i + 1];
-            tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i + 1];
+            tlbTable->pageNums[i] = tlbTable->pageNums[i + 1];
+            tlbTable->frameNums[i] = tlbTable->frameNums[i + 1];
         }
         if (nextTLBentry < TLB_SIZE) {  // if there is still room in the array, put the page and frame on the end
              // Insert the page and frame on the end
-            tlbTable->pageNumArr[nextTLBentry] = pageNumber;
-            tlbTable->frameNumArr[nextTLBentry] = frameNumber;
+            tlbTable->pageNums[nextTLBentry] = pageNumber;
+            tlbTable->frameNums[nextTLBentry] = frameNumber;
 
         }
         else {  // Otherwise put the page and frame on the number of entries - 1
-            tlbTable->pageNumArr[nextTLBentry - 1] = pageNumber;
-            tlbTable->frameNumArr[nextTLBentry - 1] = frameNumber;
+            tlbTable->pageNums[nextTLBentry - 1] = pageNumber;
+            tlbTable->frameNums[nextTLBentry - 1] = frameNumber;
         }
     }
     if (nextTLBentry < TLB_SIZE) { // If there is still room in the arrays, increment the number of entries
@@ -365,21 +365,21 @@ void tlbLRUinsert(int pageNumber, int frameNumber)
 
     // SEEK -- > Find the index to replace and increment age for all other entries
     for (int i = 0; i < TLB_SIZE; i++) {
-        if ((tlbTable->pageNumArr[i] != pageNumber) && (tlbTable->pageNumArr[i] != -1)) {
+        if ((tlbTable->pageNums[i] != pageNumber) && (tlbTable->pageNums[i] != -1)) {
             // If entry is not in TLB and not a free spot, increment its age
-            tlbTable->entryAgeArr[i]++;
+            tlbTable->entryAges[i]++;
         }
-        else if ((tlbTable->pageNumArr[i] != pageNumber) && (tlbTable->pageNumArr[i] == -1)) {
+        else if ((tlbTable->pageNums[i] != pageNumber) && (tlbTable->pageNums[i] == -1)) {
             // Available spot in TLB found
             if (!freeSpotFound) {
                 replaceIndex = i;
                 freeSpotFound = true;
             }
         }
-        else if (tlbTable->pageNumArr[i] == pageNumber) {
+        else if (tlbTable->pageNums[i] == pageNumber) {
             // Entry is already in TLB -- Reset its age
             if(!alreadyThere) {
-                tlbTable->entryAgeArr[i] = 0;
+                tlbTable->entryAges[i] = 0;
                 alreadyThere = true;
             }
         }
@@ -390,17 +390,23 @@ void tlbLRUinsert(int pageNumber, int frameNumber)
         return;
     }
     else if (freeSpotFound) { // If we found a free spot, insert
-        tlbTable->pageNumArr[replaceIndex] = pageNumber;    // Insert into free spot
-        tlbTable->frameNumArr[replaceIndex] = frameNumber;
-        tlbTable->entryAgeArr[replaceIndex] = 0;
+        tlbTable->pageNums[replaceIndex] = pageNumber;    // Insert into free spot
+        tlbTable->frameNums[replaceIndex] = frameNumber;
+        tlbTable->entryAges[replaceIndex] = 0;
     }
     else { // No more free spots -- Need to replace the oldest entry
         replaceIndex = getOldestEntry(TLB_SIZE);
-        tlbTable->pageNumArr[replaceIndex] = pageNumber;    // Insert into oldest entry
-        tlbTable->frameNumArr[replaceIndex] = frameNumber;
-        tlbTable->entryAgeArr[replaceIndex] = 0;
+        tlbTable->pageNums[replaceIndex] = pageNumber;    // Insert into oldest entry
+        tlbTable->frameNums[replaceIndex] = frameNumber;
+        tlbTable->entryAges[replaceIndex] = 0;
 
     }
+}
+
+
+void tlbLRU2insert(int pageNumber, int frameNumber)
+{
+
 }
 
 
@@ -426,46 +432,46 @@ void tlbS3FIFOinsert(int pageNumber, int frameNumber)
     int half = TLB_SIZE / 2;
 
     for (int i = 0; i <= TLB_SIZE; i++) {
-        if (tlbTable->pageNumArr[i] == pageNumber) {
-            tlbTable->numUsesArr[i]++;
+        if (tlbTable->pageNums[i] == pageNumber) {
+            tlbTable->numUses[i]++;
             return;
         }
     }
 
     if (nextTLBentry <= half) {
         for (int i = nextTLBentry; i > 0; i--) {
-            tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i - 1];
-            tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i - 1];
-            tlbTable->numUsesArr[i] = tlbTable->numUsesArr[i - 1];
+            tlbTable->pageNums[i] = tlbTable->pageNums[i - 1];
+            tlbTable->frameNums[i] = tlbTable->frameNums[i - 1];
+            tlbTable->numUses[i] = tlbTable->numUses[i - 1];
         }
-        tlbTable->pageNumArr[0] = pageNumber;    // insert the page and frame to the start
-        tlbTable->frameNumArr[0] = frameNumber;
-        tlbTable->numUsesArr[0] = 0;    // Initialize the number of uses to 0 for new entries
+        tlbTable->pageNums[0] = pageNumber;    // insert the page and frame to the start
+        tlbTable->frameNums[0] = frameNumber;
+        tlbTable->numUses[0] = 0;    // Initialize the number of uses to 0 for new entries
         nextTLBentry++;
         return;
     }
 
-    if (tlbTable->numUsesArr[half] > 0) {
+    if (tlbTable->numUses[half] > 0) {
         for (int i = nextTLBentry; i > 0; i--) {
-            tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i - 1];
-            tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i - 1];
-            tlbTable->numUsesArr[i] = tlbTable->numUsesArr[i - 1];
+            tlbTable->pageNums[i] = tlbTable->pageNums[i - 1];
+            tlbTable->frameNums[i] = tlbTable->frameNums[i - 1];
+            tlbTable->numUses[i] = tlbTable->numUses[i - 1];
         }
-        tlbTable->pageNumArr[0] = pageNumber;    // insert the page and frame to the start
-        tlbTable->frameNumArr[0] = frameNumber;
-        tlbTable->numUsesArr[0] = 0;
+        tlbTable->pageNums[0] = pageNumber;    // insert the page and frame to the start
+        tlbTable->frameNums[0] = frameNumber;
+        tlbTable->numUses[0] = 0;
         nextTLBentry++;
         return;
     }
     else {
         for (int i = half; i > 0; i--) {
-            tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i - 1];
-            tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i - 1];
-            tlbTable->numUsesArr[i] = tlbTable->numUsesArr[i - 1];
+            tlbTable->pageNums[i] = tlbTable->pageNums[i - 1];
+            tlbTable->frameNums[i] = tlbTable->frameNums[i - 1];
+            tlbTable->numUses[i] = tlbTable->numUses[i - 1];
         }
-        tlbTable->pageNumArr[0] = pageNumber;    // insert the page and frame to the start
-        tlbTable->frameNumArr[0] = frameNumber;
-        tlbTable->numUsesArr[0] = 0;
+        tlbTable->pageNums[0] = pageNumber;    // insert the page and frame to the start
+        tlbTable->frameNums[0] = frameNumber;
+        tlbTable->numUses[0] = 0;
         nextTLBentry++;
         return;
     }
@@ -484,37 +490,37 @@ void tlbSIEVEinsert(int pageNumber, int frameNumber)
 
     // If it's already in the TLB, return
     for (int i = 0; i < nextTLBentry; i++) {
-        if (tlbTable->pageNumArr[i] == pageNumber) {
+        if (tlbTable->pageNums[i] == pageNumber) {
             // Set the "used-bit" corresponding to that entry equal to 1
-            tlbTable->pointerArr[i] = 1;
+            tlbTable->pointers[i] = 1;
             return;
         }
     }
 
     if (nextTLBentry < TLB_SIZE) {  // IF TLB Buffer has open positions
         for (int i = nextTLBentry; i > 0; i--) {
-            tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i - 1];
-            tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i - 1];
-            tlbTable->pointerArr[i] = tlbTable->pointerArr[i - 1];
+            tlbTable->pageNums[i] = tlbTable->pageNums[i - 1];
+            tlbTable->frameNums[i] = tlbTable->frameNums[i - 1];
+            tlbTable->pointers[i] = tlbTable->pointers[i - 1];
         }
-        tlbTable->pageNumArr[0] = pageNumber;    // insert the page and frame to the start
-        tlbTable->frameNumArr[0] = frameNumber;
-        tlbTable->pointerArr[0] = 0;
+        tlbTable->pageNums[0] = pageNumber;    // insert the page and frame to the start
+        tlbTable->frameNums[0] = frameNumber;
+        tlbTable->pointers[0] = 0;
         nextTLBentry++;
         return;
     }
 
     // No room in TLB Buffer
     for (int count = 0; count <= TLB_SIZE; count++) {
-        if (tlbTable->pointerArr[hand] == 0) {
+        if (tlbTable->pointers[hand] == 0) {
             for(int i = hand; i > 0; i--){
-                tlbTable->pageNumArr[i] = tlbTable->pageNumArr[i - 1];
-                tlbTable->frameNumArr[i] = tlbTable->frameNumArr[i - 1];
-                tlbTable->pointerArr[i] = tlbTable->pointerArr[i - 1];
+                tlbTable->pageNums[i] = tlbTable->pageNums[i - 1];
+                tlbTable->frameNums[i] = tlbTable->frameNums[i - 1];
+                tlbTable->pointers[i] = tlbTable->pointers[i - 1];
             }
-            tlbTable->pageNumArr[0] = pageNumber;
-            tlbTable->frameNumArr[0] = frameNumber;
-            tlbTable->pointerArr[0] = 0;
+            tlbTable->pageNums[0] = pageNumber;
+            tlbTable->frameNums[0] = frameNumber;
+            tlbTable->pointers[0] = 0;
             if(hand == 0){
                 hand = TLB_SIZE - 1;
             }
@@ -522,7 +528,7 @@ void tlbSIEVEinsert(int pageNumber, int frameNumber)
         }
         else {
             // Set the pointer to 0, as entries are only protected for one loop-around at a time
-            tlbTable->pointerArr[hand] = 0;
+            tlbTable->pointers[hand] = 0;
             if (hand == 0) {
                 hand = TLB_SIZE - 1;
             }
@@ -539,13 +545,13 @@ void tlbSIEVEinsert(int pageNumber, int frameNumber)
 int getOldestEntry(int tlbSize) {
   int i, max, index;
 
-  max = tlbTable->entryAgeArr[0];
+  max = tlbTable->entryAges[0];
   index = 0;
 
   for (i = 1; i < tlbSize; i++) {
-    if (tlbTable->entryAgeArr[i] > max) {
+    if (tlbTable->entryAges[i] > max) {
        index = i;
-       max = tlbTable->entryAgeArr[i];
+       max = tlbTable->entryAges[i];
     }
   }
   return index;

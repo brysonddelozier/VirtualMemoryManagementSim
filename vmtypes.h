@@ -6,11 +6,11 @@
     represented as either a TLB cache or Page Table
 */
 typedef struct vmTable_t {
-    int *pageNumArr; // page number array
-    int *frameNumArr; // frame number array for this
-    int *pointerArr; // pointers for SIEVE
-    int *numUsesArr; // keeps track of uses for S3-FIFO
-    int *entryAgeArr; // Age of each index
+    int *pageNums; // page number array
+    int *frameNums; // frame number array for this
+    int *pointers; // pointers for SIEVE
+    int *numUses; // keeps track of uses for S3-FIFO
+    int *entryAges; // Age of each index
     int length;
     int pageFaultCount;
     int tlbHitCount;
