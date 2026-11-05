@@ -11,7 +11,7 @@
     @Param  {length}       Represents the int length of the constructed internal arrays
     @Return {vmTable_t*}   A pointer to the the created table which will represent either the TLB or Page Table
 */
-vmTable_t* createVMtable(int length)
+vmTable_t* createVMtable(int length, int s3lengths[])
 {
     vmTable_t* new_table = malloc(sizeof(vmTable_t));
     new_table->length = length;
@@ -20,6 +20,16 @@ vmTable_t* createVMtable(int length)
     new_table->pointers = malloc(sizeof(int) * length);
     new_table->numUses = malloc(sizeof(int) * length);
     new_table->entryAges = malloc(sizeof(int) * length);
+
+    new_table->initPages = malloc(sizeof(int) * s3lengths[0]);
+    new_table->initFrames = malloc(sizeof(int) * s3lengths[0]);
+    new_table->initUses = malloc(sizeof(int) * s3lengths[0]);
+    new_table->mainPages = malloc(sizeof(int) * s3lengths[1]);
+    new_table->mainFrames = malloc(sizeof(int) * s3lengths[1]);
+    new_table->mainUses = malloc(sizeof(int) * s3lengths[1]);
+    new_table->ghostPages = malloc(sizeof(int) * s3lengths[2]);
+    new_table->ghostFrames = malloc(sizeof(int) * s3lengths[2]);
+
     new_table->pageFaultCount = 0;
     new_table->tlbHitCount = 0;
     new_table->tlbMissCount = 0;
@@ -33,8 +43,29 @@ vmTable_t* createVMtable(int length)
         new_table->entryAges[i] = 0;
     }
 
+    // Initialize S3-FIFO's tables
+    // First the init queue
+    for (int i = 0; i < s3lengths[0]; i++) {
+        new_table->initPages[i] = -1;
+        new_table->initFrames[i] = -1;
+        new_table->initUses[i] = 0;    
+    }
+    // Next the main queue
+    for (int i = 0; i < s3lengths[1]; i++) {
+        new_table->mainPages[i] = -1;
+        new_table->mainFrames[i] = -1;
+        new_table->mainUses[i] = 0;    
+    }
+    // Last the ghost queue
+    for (int i = 0; i < s3lengths[2]; i++) {
+        new_table->ghostPages[i] = -1;
+        new_table->ghostFrames[i] = -1;   
+    }
+
     // If there is not enough memory on the heap to make a call to malloc() // Notify and Exit
-    if (new_table == NULL || new_table->pageNums == NULL || new_table->frameNums == NULL || new_table->pointers == NULL || new_table->numUses == NULL) {
+    if (new_table == NULL || new_table->pageNums == NULL || new_table->frameNums == NULL || new_table->pointers == NULL || new_table->numUses == NULL 
+            || new_table->initPages == NULL || new_table->initFrames == NULL || new_table->mainPages == NULL || new_table->mainFrames == NULL
+            || new_table->ghostPages == NULL || new_table->ghostFrames == NULL) {
         printf("Error - Could not allocate a new Virtual Memory Addressing Table!\r\n");
         exit(-1);
     }
@@ -61,6 +92,24 @@ void freeVMtable(vmTable_t** table)
     }
     if ((*table)->entryAges != NULL) {
         free((*table)->entryAges);
+    }
+    if ((*table)->initPages != NULL) {
+        free((*table)->initPages);
+    }
+    if ((*table)->initFrames != NULL) {
+        free((*table)->initFrames);
+    }
+    if ((*table)->mainPages != NULL) {
+        free((*table)->mainPages);
+    }
+    if ((*table)->mainFrames != NULL) {
+        free((*table)->mainFrames);
+    }
+    if ((*table)->ghostPages != NULL) {
+        free((*table)->ghostPages);
+    }
+    if ((*table)->ghostFrames != NULL) {
+        free((*table)->ghostFrames);
     }
     free(*table);
 }

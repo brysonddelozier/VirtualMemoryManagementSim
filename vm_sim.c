@@ -74,12 +74,12 @@ signed char fileReadBuffer[PAGE_READ_SIZE];
 signed char translatedValue;
 
 // Function Prototypes
-void translateAddress();
+void translateAddress(int s3lengths[3]);
 void readFromStore(int pageNumber);
 void tlbFIFOinsert(int pageNumber, int frameNumber);
 void tlbLRUinsert(int pageNumber, int frameNumber);
 void tlbLRU2insert(int pageNumber, int frameNumber);
-void tlbS3FIFOinsert(int pageNumber, int frameNumber);
+void tlbS3FIFOinsert(int pageNumber, int frameNumber, int s3lengths[3]);
 void tlbSIEVEinsert(int pageNumber, int frameNumber);
 int getOldestEntry(int tlbSize);
 double getAvgTimeInBackingStore();
@@ -88,8 +88,9 @@ double getAvgTimeInBackingStore();
 // main opens necessary files and calls on translateAddress for every entry in the addresses file
 int main(int argc, char *argv[])
 {
-    tlbTable = createVMtable(TLB_SIZE); // The TLB Structure
-    pageTable = createVMtable(PAGE_TABLE_SIZE); // The Page Table
+    int s3lengths[] = {4, 12, 4}; // This array should always be length 3
+    tlbTable = createVMtable(TLB_SIZE, s3lengths); // The TLB Structure
+    pageTable = createVMtable(PAGE_TABLE_SIZE, s3lengths); // The Page Table
     dram = dramAllocate(TOTAL_FRAME_COUNT, FRAME_SIZE); // Physical Memory
     int translationCount = 0;
     char* algoName;
@@ -143,7 +144,7 @@ int main(int argc, char *argv[])
         offset_number = getOffset(OFFSET_MASK, virtual_addr);
 
         // Get the physical address and translatedValue stored at that address
-        translateAddress();
+        translateAddress(s3lengths);
         translationCount++;  // increment the number of translated addresses
     }
 
@@ -195,23 +196,45 @@ int main(int argc, char *argv[])
     into physical addressing, and retrieves the translatedValue stored
     @Param algo_type Is '1' for tlbFIFOinsert and '2' for tlbLRUinsert
  */
-void translateAddress()
+void translateAddress(int s3lengths[3])
 {
+    // I had to add s3lengths as an argument to this function so that this array can be passed into S3-FIFO
+
     // First try to get page from TLB
     int frame_number = -1; // Assigning -1 to frame_number means invalid initially
 
-    /*
-        Look through the TLB to see if memory page exists.
-        If found, extract frame number and increment hit count
-    */
-    for (int i = 0; i < tlbTable->length; i++) {
-        if (tlbTable->pageNums[i] == page_number) {
-            frame_number = tlbTable->frameNums[i];
-            tlbTable->tlbHitCount++;
-            break;
+    // If we're using S3-FIFO, we must translate addresses a little differently
+    if (algo_choice == '3') {
+        // Look through the main queue
+        for (int i = 0; i < s3lengths[1]; i++) {
+            if (tlbTable->mainPages[i] == page_number) {
+                frame_number = tlbTable->mainFrames[i];
+                tlbTable->tlbHitCount++;
+                break;
+            }
+        }
+        // Look through the init queue
+        for (int i = 0; i < s3lengths[0]; i++) {
+            if (tlbTable->initPages[i] == page_number) {
+                frame_number = tlbTable->initFrames[i];
+                tlbTable->tlbHitCount++;
+                break;
+            }
         }
     }
-
+    else {
+        /*
+            Look through the TLB to see if memory page exists.
+            If found, extract frame number and increment hit count
+        */
+        for (int i = 0; i < tlbTable->length; i++) {
+            if (tlbTable->pageNums[i] == page_number) {
+                frame_number = tlbTable->frameNums[i];
+                tlbTable->tlbHitCount++;
+                break;
+            }
+        }
+    }
     /*
         We now need to see if there was a TLB miss.
         If so, increment the tlb miss count and go through
@@ -247,7 +270,7 @@ void translateAddress()
         tlbLRUinsert(page_number, frame_number);
     }
     else if (algo_choice == '3') {
-        tlbS3FIFOinsert(page_number, frame_number);
+        tlbS3FIFOinsert(page_number, frame_number, s3lengths);
     }
     else if (algo_choice == '4') {
         tlbSIEVEinsert(page_number, frame_number);
@@ -439,71 +462,103 @@ void tlbLRU2insert(int pageNumber, int frameNumber)
 }
 
 
-void tlbS3FIFOinsert(int pageNumber, int frameNumber)
+void tlbS3FIFOinsert(int pageNumber, int frameNumber, int s3lengths[3])
 {
-    // S3-FIFO (Segmentation faulting right now)
-    // This algorithm logically follows these steps:
-    //
-    // 1. Split the TLB into 2 seperate queues of address translations. These will function as "levels" of the TLB.
-    //
-    // 2. The first queue is where any new address translations will be put.
-    //    As we go, we will continue pushing address translaitons through this first queue.
-    //
-    // 3. When address translations are finished on the first queue (and are about to be removed and forgotten), we evaluate them.
-    //    If we used that address translation again while it was on the queue, we should keep it, as we will likely keep using it!
-    //
-    // 4. If we decide to keep an address translation, bump it up to the second queue. If we don't, we can forget it.
-    //
-    // 5. Since most address translations won't be bumped up to the second queue, address translations stored there have a much longer life.
-    //    Keeping commonly used address translations around should result in more TLB hits and a faster Operating System.
-
-
-    int half = TLB_SIZE / 2;
-
-    for (int i = 0; i <= TLB_SIZE; i++) {
-        if (tlbTable->pageNums[i] == pageNumber) {
-            tlbTable->numUses[i]++;
+    // S3-FIFO
+    
+    // First, search each queue for the correct translation
+    // If we find it in the init queue, increment it's number of uses
+    for (int i = 0; i < s3lengths[0]; i++) {
+        if (tlbTable->initPages[i] == pageNumber) {
+            tlbTable->initUses[i]++;
+            return;
+        }
+    }
+    
+    // If we find it in the main queue, increment it's number of uses
+    for (int i = 0; i < s3lengths[1]; i++) {
+        if (tlbTable->mainPages[i] == pageNumber) {
+            tlbTable->mainUses[i]++;
             return;
         }
     }
 
-    if (nextTLBentry <= half) {
-        for (int i = nextTLBentry; i > 0; i--) {
-            tlbTable->pageNums[i] = tlbTable->pageNums[i - 1];
-            tlbTable->frameNums[i] = tlbTable->frameNums[i - 1];
-            tlbTable->numUses[i] = tlbTable->numUses[i - 1];
+    // If we find it in the ghost queue, put it into main with 1 vote
+    for (int i = 0; i < s3lengths[2]; i++) {
+        if (tlbTable->ghostPages[i] == pageNumber) {
+            // Find the least popular entry in main
+            int leastVotes = 1000;
+            int leastPopularJ = 0;
+            for (int j = 0; j < s3lengths[1]; j++) {
+                if (tlbTable->mainUses[j] < leastVotes) {
+                    leastVotes = tlbTable->mainUses[j];
+                    leastPopularJ = j;
+                }
+            }
+            // Replace that entry with our new one
+            tlbTable->mainPages[leastPopularJ] = pageNumber;
+            tlbTable->mainFrames[leastPopularJ] = frameNumber;
+            tlbTable->mainUses[leastPopularJ] = 1;
+
+            // Now slide the ghost queue back so we don't have any duplicates
+            // If we're already at the last spot in the ghost queue, we don't have to loop thru it
+            if (i == s3lengths[2] - 1) {
+                tlbTable->ghostPages[i] = -1;
+                tlbTable->ghostFrames[i] = -1;
+            }
+            // Else, we have to loop thru and slide everything back
+            else {
+                for (int k = i; k < s3lengths[2] - 1; k++) {
+                    tlbTable->ghostPages[k] = tlbTable->ghostPages[k + 1];
+                    tlbTable->ghostFrames[k] = tlbTable->ghostFrames[k + 1];     
+                }
+                // Set the last spot in the ghost to empty again
+                tlbTable->ghostPages[s3lengths[2] - 1] = -1;
+                tlbTable->ghostFrames[s3lengths[2] - 1] = -1;
+            }
+            return;
         }
-        tlbTable->pageNums[0] = pageNumber;    // insert the page and frame to the start
-        tlbTable->frameNums[0] = frameNumber;
-        tlbTable->numUses[0] = 0;    // Initialize the number of uses to 0 for new entries
-        nextTLBentry++;
-        return;
+    }
+    
+    // If we didn't find it, add it to init
+    // If we used the last entry in init, move it to main
+    if (tlbTable->initUses[s3lengths[0] - 1] > 0) {
+        // Find the least popular entry in main
+        int leastVotes = 1000;
+        int leastPopularJ = 0;
+        for (int j = 0; j < s3lengths[1]; j++) {
+            if (tlbTable->mainUses[j] < leastVotes) {
+                leastVotes = tlbTable->mainUses[j];
+                leastPopularJ = j;
+            }
+        }
+
+        // Replace that entry with the last one from init
+        tlbTable->mainPages[leastPopularJ] = tlbTable->initPages[s3lengths[0] - 1];
+        tlbTable->mainFrames[leastPopularJ] = tlbTable->initFrames[s3lengths[0] - 1];
+        tlbTable->mainUses[leastPopularJ] = tlbTable->initUses[s3lengths[0] - 1];
+    }
+    // If we didn't use the last entry in init, move it to ghost
+    else {
+        for (int i = s3lengths[2] - 1; i > 0; i--) {
+            tlbTable->ghostPages[i] = tlbTable->ghostPages[i - 1];
+            tlbTable->ghostFrames[i] = tlbTable->ghostFrames[i - 1];
+        }
+        tlbTable->ghostPages[0] = tlbTable->initPages[s3lengths[0] - 1];
+        tlbTable->ghostFrames[0] = tlbTable->initFrames[s3lengths[0] - 1];
     }
 
-    if (tlbTable->numUses[half] > 0) {
-        for (int i = nextTLBentry; i > 0; i--) {
-            tlbTable->pageNums[i] = tlbTable->pageNums[i - 1];
-            tlbTable->frameNums[i] = tlbTable->frameNums[i - 1];
-            tlbTable->numUses[i] = tlbTable->numUses[i - 1];
-        }
-        tlbTable->pageNums[0] = pageNumber;    // insert the page and frame to the start
-        tlbTable->frameNums[0] = frameNumber;
-        tlbTable->numUses[0] = 0;
-        nextTLBentry++;
-        return;
+    // Now slide everything in init up
+    for (int i = s3lengths[0] - 1; i > 0; i--) {
+        tlbTable->initPages[i] = tlbTable->initPages[i - 1];
+        tlbTable->initFrames[i] = tlbTable->initFrames[i - 1];
+        tlbTable->initUses[i] = tlbTable->initUses[i - 1];
     }
-    else {
-        for (int i = half; i > 0; i--) {
-            tlbTable->pageNums[i] = tlbTable->pageNums[i - 1];
-            tlbTable->frameNums[i] = tlbTable->frameNums[i - 1];
-            tlbTable->numUses[i] = tlbTable->numUses[i - 1];
-        }
-        tlbTable->pageNums[0] = pageNumber;    // insert the page and frame to the start
-        tlbTable->frameNums[0] = frameNumber;
-        tlbTable->numUses[0] = 0;
-        nextTLBentry++;
-        return;
-    }
+    // Finally, put the new entry at the front of init
+    tlbTable->initPages[0] = pageNumber;
+    tlbTable->initFrames[0] = frameNumber;
+    tlbTable->initUses[0] = 0;
+    return;
 }
 
 

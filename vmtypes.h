@@ -11,6 +11,18 @@ typedef struct vmTable_t {
     int *pointers; // pointers for SIEVE
     int *numUses; // keeps track of uses for S3-FIFO
     int *entryAges; // Age of each index
+
+    // the 3 queues for S3-FIFO ('init', 'main', and 'ghost')
+    int *initPages;
+    int *initFrames;
+    int *initUses;
+    int *mainPages;
+    int *mainFrames;
+    int *mainUses;
+    int *ghostPages;
+    int *ghostFrames;
+    int *s3lengths[3];
+
     int length;
     int pageFaultCount;
     int tlbHitCount;
@@ -65,7 +77,7 @@ typedef struct dramMatrix {
 
 // This function creates a new Virtual Memory Table for
 // Logical address referencing -- Can represent either the TLB or Page Table Cache
-vmTable_t* createVMtable(int length);
+vmTable_t* createVMtable(int length, int s3lengths[3]);
 
 // This function prints contents of the vmTable
 void displayTable(vmTable_t** tableToView);
